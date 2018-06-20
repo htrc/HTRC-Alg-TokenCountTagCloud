@@ -15,6 +15,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import org.hathitrust.htrc.algorithms.tokencounttagcloud.Helper._
 import org.hathitrust.htrc.algorithms.tokencounttagcloud.TokenFormat._
+import org.hathitrust.htrc.algorithms.tokencounttagcloud.stanfordnlp.NLPInstances
 import org.hathitrust.htrc.data.TextOptions.{DehyphenateAtEol, RemoveEmptyLines, TrimLines}
 import org.hathitrust.htrc.data.{HtrcVolume, HtrcVolumeId}
 import org.hathitrust.htrc.tools.dataapi.DataApiClient
@@ -24,8 +25,8 @@ import org.hathitrust.htrc.tools.spark.errorhandling.RddExtensions._
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, ExecutionContext}
 import scala.io.{Codec, Source, StdIn}
 
 /**
@@ -43,11 +44,11 @@ object Main {
     val numCores = conf.numCores.map(_.toString).getOrElse("*")
     val dataApiUrl = conf.dataApiUrl()
     val pairtreeRootPath = conf.pairtreeRootPath.toOption.map(_.toString)
-    val outputPath = conf.outputPath().toString
-    val maxTokensToDisplay = conf.maxDisplay()
+    val outputPath = conf.outputPath()
     val language = conf.language()
     val correctionsUrl = conf.correctionsUrl.toOption
     val stopWordsUrl = conf.stopWordsUrl.toOption
+    val maxTokensToDisplay = conf.maxDisplay()
     val lowercaseBeforeCounting = conf.lowercaseBeforeCounting()
     val tagCloudTokenRegex = conf.tagCloudTokenFilter.toOption.map(_.r)
     val htids = conf.htids.toOption match {
@@ -70,6 +71,8 @@ object Main {
 
     val t0 = Timer.nanoClock()
     val idErrAcc = new ErrorAccumulator[String, String](identity)(sc)
+
+    outputPath.mkdirs()
 
     type Token = String
     type Replacement = String
@@ -203,7 +206,7 @@ object Main {
 
     if (idErrAcc.nonEmpty) {
       logger.info("Writing error report...")
-      idErrAcc.saveErrors(new Path(outputPath, "id_errors.txt"), _.toString)
+      idErrAcc.saveErrors(new Path(outputPath.toString, "id_errors.txt"), _.toString)
     }
 
     val tokenCountsCsvFile = new File(outputPath, "token_counts.csv")

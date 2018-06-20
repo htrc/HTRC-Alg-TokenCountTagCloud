@@ -59,10 +59,9 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   )
 
   val language: ScallopOption[String] = opt[String]("language",
-    descr = s"""ISO 639-1 language code (supported languages: ${Main.supportedLanguages.mkString(", ")})""",
+    descr = "ISO 639-1 language code ( https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes )",
     argName = "LANG",
-    required = true,
-    validate = Main.supportedLanguages.contains
+    required = true
   )
 
   val correctionsUrl: ScallopOption[URL] = opt[URL]("corrections-url",

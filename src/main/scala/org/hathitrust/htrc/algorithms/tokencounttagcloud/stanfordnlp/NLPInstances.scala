@@ -1,9 +1,10 @@
-package org.hathitrust.htrc.algorithms.tokencounttagcloud
+package org.hathitrust.htrc.algorithms.tokencounttagcloud.stanfordnlp
 
 import java.util.{Locale, Properties, concurrent}
 
 import edu.stanford.nlp.pipeline.StanfordCoreNLP
-import Helper.{loadPropertiesFromClasspath, logger}
+import org.hathitrust.htrc.algorithms.tokencounttagcloud.Helper.{loadPropertiesFromClasspath, logger}
+import org.hathitrust.htrc.algorithms.tokencounttagcloud.Main
 
 import scala.util.{Failure, Success}
 
@@ -13,7 +14,7 @@ object NLPInstances {
   private def createInstance(locale: Locale): StanfordCoreNLP = {
     val lang = locale.getLanguage
     val langProps = s"/nlp/config/$lang.properties"
-    logger.info(s"Loading ${locale.getDisplayLanguage} settings from $langProps...")
+    logger.info(s"Loading ${locale.getDisplayLanguage} settings from $langProps")
     val props = loadPropertiesFromClasspath(langProps) match {
       case Success(p) => p
       case Failure(e) =>
