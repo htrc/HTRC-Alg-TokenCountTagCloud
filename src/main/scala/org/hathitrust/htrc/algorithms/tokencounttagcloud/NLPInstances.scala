@@ -1,6 +1,6 @@
 package org.hathitrust.htrc.algorithms.tokencounttagcloud
 
-import java.util.{Locale, Properties}
+import java.util.{Locale, Properties, concurrent}
 
 import edu.stanford.nlp.pipeline.StanfordCoreNLP
 import Helper.{loadPropertiesFromClasspath, logger}
@@ -8,7 +8,21 @@ import Helper.{loadPropertiesFromClasspath, logger}
 import scala.util.{Failure, Success}
 
 object NLPInstances {
-  private val instances: Map[String, StanfordCoreNLP] = Map(createInstances(): _*)
+  private val instances = new concurrent.ConcurrentHashMap[Locale, StanfordCoreNLP]()
+
+  private def createInstance(locale: Locale): StanfordCoreNLP = {
+    val lang = locale.getLanguage
+    val langProps = s"/nlp/config/$lang.properties"
+    logger.info(s"Loading ${locale.getDisplayLanguage} settings from $langProps...")
+    val props = loadPropertiesFromClasspath(langProps) match {
+      case Success(p) => p
+      case Failure(e) =>
+        logger.error(s"Unable to load $lang settings", e)
+        throw e
+    }
+
+    new StanfordCoreNLP(props)
+  }
 
   val whitespaceTokenizer: StanfordCoreNLP = {
     val props = new Properties()
@@ -17,22 +31,17 @@ object NLPInstances {
     new StanfordCoreNLP(props)
   }
 
-  private def createInstances(): List[(String, StanfordCoreNLP)] = {
-    for (lang <- Main.supportedLanguages.toList) yield {
-      val langProps = s"/nlp/config/$lang.properties"
-      logger.debug(s"Loading $lang settings from $langProps...")
-      val props = loadPropertiesFromClasspath(langProps) match {
-        case Success(p) => p
-        case Failure(e) =>
-          logger.error(s"Unable to load $lang settings", e)
-          throw e
+  def forLanguage(lang: String): Option[StanfordCoreNLP] = forLocale(Locale.forLanguageTag(lang))
+
+  def forLocale(locale: Locale): Option[StanfordCoreNLP] = {
+    if (Main.supportedLanguages.contains(locale.getLanguage))
+      Option(instances.get(locale)).orElse {
+        instances.synchronized {
+          val instance = createInstance(locale)
+          instances.putIfAbsent(locale, instance)
+          Some(instance)
+        }
       }
-
-      lang -> new StanfordCoreNLP(props)
-    }
+    else None
   }
-
-  def forLocale(locale: Locale): Option[StanfordCoreNLP] = instances.get(locale.getLanguage)
-
-  def forLanguage(lang: String): Option[StanfordCoreNLP] = instances.get(lang)
 }
