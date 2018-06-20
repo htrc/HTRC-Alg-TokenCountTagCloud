@@ -1,0 +1,85 @@
+@import play.twirl.api.Html
+@import play.api.libs.json.Json
+@import org.hathitrust.htrc.algorithms.tokencounttagcloud.TagCloudConfig
+@import scala.collection.mutable
+@(tokens: mutable.MutableList[String], counts: mutable.MutableList[Int])(config: TagCloudConfig)
+<!DOCTYPE html>
+<meta charset="utf-8">
+<html>
+    <head>
+        <title>@config.title</title>
+        <script type='text/javascript' src="@config.d3ApiUrl"></script>
+        <script type='text/javascript' src="@config.d3LayoutCloudApiUrl"></script>
+    </head>
+    <body>
+        <script type='text/javascript'>
+            var data = {
+                words: @Html(Json.stringify(Json.toJson(tokens))),
+                counts: @Html(Json.stringify(Json.toJson(counts)))
+            };
+
+            var width = @config.width,
+                height = @config.height,
+                fontMin = @config.fontMin,
+                fontMax = @config.fontMax,
+                rotation = @config.rotation;
+
+            var scale = d3.scale.@{config.scale}();
+            var fill = d3.scale.@{config.colorPalette}();
+            scale.domain([d3.min(data.counts), d3.max(data.counts)]);
+            scale.range([fontMin, fontMax]);
+
+            d3.layout.cloud().size([width, height])
+                .words(data.words.map(function (d, i) {
+                    var count = data.counts[i];
+                    return {
+                        'text': d @if(config.showCounts) { + " " + count },
+                        'size': scale(count)
+                    };
+                }))
+            @if(config.overflow) {
+                .overflow(true)
+            }
+                .rotate(function() { return ~~(Math.random() * 2) * rotation; })
+                .fontSize(function(d) { return d.size; })
+            @if(config.fontName.isDefined) {
+                .font("@config.fontName.get")
+            }
+                .on("end", draw)
+                .start();
+
+            function draw(words) {
+                if (words.length < data.words.length)
+                    console.log("Warning: Could only fit " + words.length + " words in the given space, out of " + data.words.length + " total words");
+                d3.select("body").append("svg")
+                    .attr("width", width)
+                    .attr("height", height)
+                    .append("g")
+                    .attr("transform", "translate(" + width/2 + "," + height/2 + ")")
+                    .selectAll("text")
+                    .data(words)
+                    .enter()
+                    .append("text")
+                    .style("font-size", function(d) { return d.size + "px"; })
+                @if(config.fontName.isDefined) {
+                    .style("font-family", function(d) { return d.font; })
+                }
+                    .attr("text-anchor", "middle")
+                    .attr("transform", function(d) {
+                        return "translate(" + [d.x, d.y] + ")rotate(" + d.rotate + ")";
+                    })
+                    .style("fill", function(d) { return fill(d.text.toLowerCase()); })
+                    .text(function(d) { return d.text; })
+                @if(config.showToolTip) {
+                    .append("title")
+                    .text(function(d, i) {
+                        var idx = data.words.indexOf(d.text);
+                        var count = data.counts[idx];
+                        return d.text + "\n" + count;
+                    })
+                }
+                    ;
+            }
+        </script>
+    </body>
+</html>
