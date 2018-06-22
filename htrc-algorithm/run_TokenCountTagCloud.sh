@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 ### ADMINISTRATIVE SETTINGS - DO NOT MODIFY ###
+
 error() {
    [ -z "$1" ] && printf "Error: An unspecified error occurred\n" || printf "Error: $1\n" 1>&2
    [ -z "$2" ] || exit $2
@@ -29,6 +30,9 @@ cd "$HTRC_WORKING_DIR"
 
 unset CHILD_PID
 trap_with_arg stop_algorithm INT TERM
+
+# use our own Oracle Java 8 version, if available, instead of the system-default Java
+[ -d "$HOME/software/java8" ] && export JAVA_HOME="$HOME/software/java8"
 
 
 ### JOB SETTINGS ###
@@ -61,11 +65,12 @@ ALG_ARGS=" \
   -l $language \
   -c $num_cores \
   $OPTIONAL_ARGS \
-  <(sed 1d $workset)
+  <(sed 1d \"$workset\")
 "
 
-ALG_JAVA_OPTS="-J-showversion -J-DlogLevel=DEBUG"
+ALG_JAVA_OPTS="-J-showversion"
 [[ ! -z "$JAVA_MAX_HEAP_SIZE" ]] && ALG_JAVA_OPTS="$ALG_JAVA_OPTS -J$JAVA_MAX_HEAP_SIZE"
+
 
 ### DO NOT MODIFY BELOW THIS LINE ###
 
