@@ -92,7 +92,7 @@
     </system_properties>
     
     <results>
-        <result type="text/html" name="tokencounts.html"/>
-        <result type="text/plain" name="tokencounts.csv"/>
+        <result type="text/html" name="token_counts.html"/>
+        <result type="text/csv" name="token_counts.csv"/>
     </results>
 </algorithm>
