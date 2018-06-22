@@ -1,0 +1,98 @@
+<algorithm>
+    <info>
+        <name>Token_Count_Tag_Cloud</name>
+        <short_name>TagCloud</short_name>
+        <version>2.0</version>
+        <shortdesc>TBD</shortdesc>
+        <description>TBD</description>
+        <authors>
+            <author name="Boris Capitanu"/>
+        </authors>
+        <supportUrl>https://github.com/htrc/HTRC-Alg-TokenCountTagCloud/issues</supportUrl>
+        
+        <parameters>
+            <param
+                name="input_collection"
+                type="collection"
+                required="true">
+                <label>Please select a workset for analysis</label>
+                <description>The workset containing the volume ids to be used for analysis.</description>
+            </param>
+            <param
+                name="language"
+                type="string"
+                required="true">
+                <label>Please specify ISO 639-1 language code representing the predominant language in your workset</label>
+                <description>For a list of language codes, see: https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes</description>
+            </param>
+            <param
+                name="stopwords_url"
+                type="url"
+                required="false">
+                <label>Please provide a URL pointing to a text file containing stop words to be removed (one per line)</label>
+                <description>For English, you can use http://data.analytics.hathitrust.org/data/text/default_stopwords_en.txt</description>
+            </param>
+            <param
+                name="corrections_url"
+                type="url"
+                required="false">
+                <label>Please provide a URL pointing to a CSV file containing replacement rules</label>
+                <description>For English, you can use http://data.analytics.hathitrust.org/data/text/default_corrections.txt</description>
+            </param>
+            <param
+                name="lowercase"
+                type="boolean"
+                required="false"
+                defaultValue="True">
+                <label>Lowercase all tokens before counting?</label>
+                <description>If set to true, tokens will be lowercased before counting.</description>
+            </param>
+            <param
+                name="token_filter"
+                type="string"
+                required="false"
+                defaultValue="^\p{L}[\p{L}-]+$">
+                <label>Display only tokens that match this regular expression</label>
+                <description>This regular expression controls which tokens get displayed in the tag cloud. The generated token count file does not use this filter and will contain all tokens with their counts.</description>
+            </param>
+            <param
+                name="max_display"
+                type="int"
+                required="false"
+                defaultValue="200">
+                <label>Please provide the maximum number of tokens to display in the tag cloud</label>
+                <description>The maximum number of tokens to display in the tag cloud.</description>
+            </param>
+        </parameters>
+    </info>
+    
+    <execution_info>
+        <number_of_processors>8</number_of_processors>
+    </execution_info>
+    
+    <run_script>run_TokenCountTagCloud.sh</run_script>
+    <properties_file_name>TokenCountTagCloud.properties</properties_file_name>
+    
+    <dependencies>
+        <dependency name="run_TokenCountTagCloud.sh" path="dependencies/run_TokenCountTagCloud.sh"/>
+    </dependencies>
+    
+    <system_properties>
+        <e key="data_api_url">$data_api_url</e>
+        <e key="auth_token">$auth_token</e>
+        <e key="output_dir">$output_dir</e>
+        <e key="workset">$input_collection</e>
+        <e key="language">$language</e>
+        <e key="stopwords_url">$stopwords_url</e>        
+        <e key="corrections_url">$corrections_url</e>
+        <e key="lowercase">$lowercase</e>
+        <e key="token_filter">$token_filter</e>
+        <e key="max_display">$max_display</e>
+        <e key="num_cores">8</e>
+    </system_properties>
+    
+    <results>
+        <result type="text/html" name="tokencounts.html"/>
+        <result type="text/plain" name="tokencounts.csv"/>
+    </results>
+</algorithm>
