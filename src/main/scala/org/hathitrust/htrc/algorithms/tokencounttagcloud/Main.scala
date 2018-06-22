@@ -11,7 +11,7 @@ import html.TagCloud
 import kantan.csv._
 import kantan.csv.ops._
 import org.apache.hadoop.fs.Path
-import org.apache.spark.SparkConf
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.SparkSession
 import org.hathitrust.htrc.algorithms.tokencounttagcloud.Helper._
 import org.hathitrust.htrc.algorithms.tokencounttagcloud.TokenFormat._
@@ -37,6 +37,14 @@ import scala.io.{Codec, Source, StdIn}
 object Main {
   val appName: String = "token-count-tag-cloud"
   val supportedLanguages: Set[String] = Set("ar", "zh", "en", "fr", "de", "es")
+
+  def stopSparkAndExit(sc: SparkContext, exitCode: Int = 0): Unit = {
+    try {
+      sc.stop()
+    } finally {
+      System.exit(exitCode)
+    }
+  }
 
   def main(args: Array[String]): Unit = {
     val conf = new Conf(args)
@@ -66,180 +74,197 @@ object Main {
 
     val sc = spark.sparkContext
 
-    logger.info("Starting...")
-    logger.debug(s"Using $numCores cores")
+    try {
+      logger.info("Starting...")
+      logger.debug(s"Using $numCores cores")
 
-    val t0 = Timer.nanoClock()
-    val idErrAcc = new ErrorAccumulator[String, String](identity)(sc)
+      val t0 = Timer.nanoClock()
+      outputPath.mkdirs()
 
-    outputPath.mkdirs()
+      type Token = String
+      type Replacement = String
+      type Correction = (Token, Replacement)
 
-    type Token = String
-    type Replacement = String
-    type Correction = (Token, Replacement)
+      val stopwordsBcast = {
+        val stopwords = stopWordsUrl match {
+          case Some(url) =>
+            logger.info("Loading stop words from {}", url)
+            Source.fromURL(url)(Codec.UTF8).getLines().toSet
 
-    val stopwordsBcast = {
-      val stopwords = stopWordsUrl match {
-        case Some(url) =>
-          logger.info("Loading stop words from {}", url)
-          Source.fromURL(url)(Codec.UTF8).getLines().toSet
+          case None => Set.empty[Token]
+        }
 
-        case None => Set.empty[Token]
+        sc.broadcast(stopwords)
       }
 
-      sc.broadcast(stopwords)
-    }
-
-    val correctionsBcast = {
-      val corrections = correctionsUrl match {
-        case Some(url) =>
-          logger.info("Loading correction data from {}", url)
-          url.asCsvReader[Correction](rfc.withHeader)
-            .foldLeft(Map.empty[Token, Replacement]) { (map, res) =>
-              res match {
-                case Right(row) => map + row
-                case Left(error) =>
-                  throw new RuntimeException(s"Error parsing correction data", error)
+      val correctionsBcast = {
+        val corrections = correctionsUrl match {
+          case Some(url) =>
+            logger.info("Loading correction data from {}", url)
+            url.asCsvReader[Correction](rfc.withHeader)
+              .foldLeft(Map.empty[Token, Replacement]) { (map, res) =>
+                res match {
+                  case Right(row) => map + row
+                  case Left(error) =>
+                    throw new RuntimeException(s"Error parsing correction data", error)
+                }
               }
+
+          case None => Map.empty[Token, Replacement]
+        }
+
+        sc.broadcast(corrections)
+      }
+
+      val idsRDD = numPartitions match {
+        case Some(n) => sc.parallelize(htids, n) // split input into n partitions
+        case None => sc.parallelize(htids) // use default number of partitions
+      }
+
+      val volumeErrAcc = new ErrorAccumulator[String, String](identity)(sc)
+
+      val volumesRDD = pairtreeRootPath match {
+        case Some(path) =>
+          logger.info("Processing volumes from {}", path)
+          idsRDD.tryMap { id =>
+            val pairtreeVolume =
+              HtrcVolumeId
+                .parseUnclean(id)
+                .map(_.toPairtreeDoc(path))
+                .get
+
+            HtrcVolume.from(pairtreeVolume)(Codec.UTF8).get
+          }(volumeErrAcc)
+
+        case None =>
+          val dataApiToken = Option(System.getenv("DATAAPI_TOKEN")) match {
+            case Some(token) => token
+            case None => throw new RuntimeException("DATAAPI_TOKEN environment variable is missing")
+          }
+
+          logger.info("Processing volumes from {}", dataApiUrl)
+
+          idsRDD.mapPartitions { ids =>
+            val dataApi = DataApiClient.Builder()
+              .setApiUrl(dataApiUrl.toString)
+              .setAuthToken(dataApiToken)
+              .setUseTempStorage(failOnError = false)
+              .build()
+
+            val ec = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor())
+            val volumeIterator = Await.result(dataApi.retrieveVolumes(ids)(Codec.UTF8, ec), Duration.Inf)
+            val volumes = using(volumeIterator)(_
+              .withFilter {
+                case Left(_) => true
+                case Right(error) =>
+                  logger.error("DataAPI: {}", error.message)
+                  false
+              }
+              .collect { case Left(volume) => volume }
+              .toList
+            )
+            volumes.iterator
+          }
+      }
+
+      val tokenCounts =
+        volumesRDD
+          .flatMap(_.structuredPages.map(_.body(TrimLines, RemoveEmptyLines, DehyphenateAtEol)))
+          .flatMap { pageText =>
+            var text = pageText
+            val nlp = NLPInstances.forLanguage(language).getOrElse {
+              // replace zero-width spaces with actual spaces
+              text = text.replaceAll("""\p{Cf}""", " ")
+              NLPInstances.whitespaceTokenizer
             }
 
-        case None => Map.empty[Token, Replacement]
-      }
+            val locale = Locale.forLanguageTag(language)
 
-      sc.broadcast(corrections)
-    }
+            val annotatedText: Annotation = {
+              val annotation = new Annotation(text)
+              nlp.annotate(annotation)
+              annotation
+            }
 
-    val idsRDD = numPartitions match {
-      case Some(n) => sc.parallelize(htids, n) // split input into n partitions
-      case None => sc.parallelize(htids) // use default number of partitions
-    }
+            val stopwords = stopwordsBcast.value
+            val corrections = correctionsBcast.value
 
-    val volumesRDD = pairtreeRootPath match {
-      case Some(path) =>
-        logger.info("Processing volumes from {}", path)
-        idsRDD.tryMap { id =>
-          val pairtreeVolume =
-            HtrcVolumeId
-              .parseUnclean(id)
-              .map(_.toPairtreeDoc(path))
-              .get
+            val pageTokens =
+              annotatedText
+                .get(classOf[CoreAnnotations.TokensAnnotation])
+                .iterator()
+                .asScala
+                .map { label =>
+                  val token = label.originalText()
+                  (token, token.toLowerCase(locale))
+                }
+                .collect {
+                  case (token, tokenLowerCase) if !stopwords.contains(tokenLowerCase) =>
+                    corrections.get(tokenLowerCase) match {
+                      case Some(correction) if lowercaseBeforeCounting => correction
+                      case Some(correction) =>
+                        checkTokenFormat(token) match {
+                          case UpperCase => correction.toUpperCase(locale)
+                          case LowerCase => correction
+                          case SentenceCase if correction.length >= 2 => correction.head.toUpper + correction.tail.toLowerCase(locale)
+                          case _ => correction
+                        }
+                      case None if lowercaseBeforeCounting => tokenLowerCase
+                      case None => token
+                    }
+                }
 
-          HtrcVolume.from(pairtreeVolume)(Codec.UTF8).get
-        }(idErrAcc)
+            val pageTokenCounts = pageTokens.foldLeft(Map.empty[Token, Int].withDefaultValue(0))(
+              (counts, token) => counts.updated(token, counts(token) + 1))
 
-      case None =>
-        val dataApiToken = Option(System.getenv("DATAAPI_TOKEN")) match {
-          case Some(token) => token
-          case None => throw new RuntimeException("DATAAPI_TOKEN environment variable is missing")
-        }
-
-        logger.info("Processing volumes from {}", dataApiUrl)
-
-        idsRDD.mapPartitions { ids =>
-          val dataApi = DataApiClient.Builder()
-            .setApiUrl(dataApiUrl.toString)
-            .setAuthToken(dataApiToken)
-            .setUseTempStorage()
-            .build()
-
-          val ec = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor())
-          val volumes = using(Await.result(dataApi.retrieveVolumes(ids)(Codec.UTF8, ec), Duration.Inf))(_.toList)
-          volumes.iterator
-        }
-    }
-
-    val tokenCounts =
-      volumesRDD
-        .flatMap(_.structuredPages.map(_.body(TrimLines, RemoveEmptyLines, DehyphenateAtEol)))
-        .flatMap { pageText =>
-          var text = pageText
-          val nlp = NLPInstances.forLanguage(language).getOrElse {
-            // replace zero-width spaces with actual spaces
-            text = text.replaceAll("""\p{Cf}""", " ")
-            NLPInstances.whitespaceTokenizer
+            pageTokenCounts
           }
+          .reduceByKey(_ + _)
+          .sortBy(_._2, ascending = false)
+          .collect()
 
-          val locale = Locale.forLanguageTag(language)
+      if (volumeErrAcc.nonEmpty) {
+        logger.info("Writing error report...")
+        volumeErrAcc.saveErrors(new Path(outputPath.toString, "volume_errors.txt"), _.toString)
+      }
 
-          val annotatedText: Annotation = {
-            val annotation = new Annotation(text)
-            nlp.annotate(annotation)
-            annotation
-          }
+      val tokenCountsCsvFile = new File(outputPath, "token_counts.csv")
+      val tagCloudHtmlFile = new File(outputPath, "tag_cloud.html")
 
-          val stopwords = stopwordsBcast.value
-          val corrections = correctionsBcast.value
+      logger.info("Saving token counts...")
+      val writer = new OutputStreamWriter(new FileOutputStream(tokenCountsCsvFile), Codec.UTF8.charSet)
+      val csvConfig = rfc.withHeader("token", "count")
+      using(writer.asCsvWriter[(Token, Int)](csvConfig)) { out =>
+        out.write(tokenCounts)
+      }
 
-          val pageTokens =
-            annotatedText
-              .get(classOf[CoreAnnotations.TokensAnnotation])
-              .iterator()
-              .asScala
-              .map { label =>
-                val token = label.originalText()
-                (token, token.toLowerCase(locale))
-              }
-              .collect {
-                case (token, tokenLowerCase) if !stopwords.contains(tokenLowerCase) =>
-                  corrections.get(tokenLowerCase) match {
-                    case Some(correction) if lowercaseBeforeCounting => correction
-                    case Some(correction) =>
-                      checkTokenFormat(token) match {
-                        case UpperCase => correction.toUpperCase(locale)
-                        case LowerCase => correction
-                        case SentenceCase if correction.length >= 2 => correction.head.toUpper + correction.tail.toLowerCase(locale)
-                        case _ => correction
-                      }
-                    case None if lowercaseBeforeCounting => tokenLowerCase
-                    case None => token
-                  }
-              }
-
-          val pageTokenCounts = pageTokens.foldLeft(Map.empty[Token, Int].withDefaultValue(0))(
-            (counts, token) => counts.updated(token, counts(token) + 1))
-
-          pageTokenCounts
+      logger.info("Saving token counts tag cloud...")
+      using(new PrintWriter(tagCloudHtmlFile, Codec.UTF8.name)) { out =>
+        val it = tokenCounts.iterator
+        val filteredTokenCounts = tagCloudTokenRegex match {
+          case Some(regex) => it.filter { case (token, _) => regex.findFirstMatchIn(token).isDefined }
+          case None => it
         }
-        .reduceByKey(_ + _)
-        .sortBy(_._2, ascending = false)
-        .collect()
-
-    if (idErrAcc.nonEmpty) {
-      logger.info("Writing error report...")
-      idErrAcc.saveErrors(new Path(outputPath.toString, "id_errors.txt"), _.toString)
-    }
-
-    val tokenCountsCsvFile = new File(outputPath, "token_counts.csv")
-    val tokenCountsHtmlFile = new File(outputPath, "token_counts.html")
-
-    logger.info("Saving token counts...")
-    val writer = new OutputStreamWriter(new FileOutputStream(tokenCountsCsvFile), Codec.UTF8.charSet)
-    val csvConfig = rfc.withHeader("token", "count")
-    using(writer.asCsvWriter[(Token, Int)](csvConfig)) { out =>
-      out.write(tokenCounts)
-    }
-
-    logger.info("Saving token counts tag cloud...")
-    using(new PrintWriter(tokenCountsHtmlFile, Codec.UTF8.name)) { out =>
-      val it = tokenCounts.iterator
-      val filteredTokenCounts = tagCloudTokenRegex match {
-        case Some(regex) => it.filter { case (token, _) => regex.findFirstMatchIn(token).isDefined }
-        case None => it
+        val tokens = mutable.MutableList.empty[Token]
+        val counts = mutable.MutableList.empty[Int]
+        for ((token, count) <- filteredTokenCounts.take(maxTokensToDisplay)) {
+          tokens += token
+          counts += count
+        }
+        out.write(TagCloud(tokens, counts)(TagCloudConfig(title = "Tag Cloud")).toString)
       }
-      val tokens = mutable.MutableList.empty[Token]
-      val counts = mutable.MutableList.empty[Int]
-      for ((token, count) <- filteredTokenCounts.take(maxTokensToDisplay)) {
-        tokens += token
-        counts += count
-      }
-      out.write(TagCloud(tokens, counts)(TagCloudConfig(title = "Tag Cloud")).toString)
+
+      val t1 = Timer.nanoClock()
+      val elapsed = t1 - t0
+
+      logger.info(f"All done in ${Timer.pretty(elapsed)}")
+    }
+    catch {
+      case e: Throwable =>
+        logger.error(s"Uncaught exception", e)
+        stopSparkAndExit(sc, exitCode = 1)
     }
 
-    val t1 = Timer.nanoClock()
-    val elapsed = t1 - t0
-
-    logger.info(f"All done in ${Timer.pretty(elapsed)}")
-
-    System.exit(0)
+    stopSparkAndExit(sc)
   }
 }

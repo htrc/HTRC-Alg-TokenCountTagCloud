@@ -63,7 +63,7 @@ lazy val `token-count-tag-cloud` = (project in file(".")).
     licenses += "Apache2" -> url("http://www.apache.org/licenses/LICENSE-2.0"),
     libraryDependencies ++= Seq(
       "org.hathitrust.htrc"           %% "data-model"           % "1.2",
-      "org.hathitrust.htrc"           %% "dataapi-client"       % "0.7",
+      "org.hathitrust.htrc"           %% "dataapi-client"       % "0.8.2",
       "org.hathitrust.htrc"           %% "scala-utils"          % "2.6",
       "org.hathitrust.htrc"           %% "spark-utils"          % "1.1.0",
       "edu.stanford.nlp"              %  "stanford-corenlp"     % "3.9.1",

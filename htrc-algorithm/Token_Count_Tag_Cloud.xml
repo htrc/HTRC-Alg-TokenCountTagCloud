@@ -92,7 +92,8 @@
     </system_properties>
     
     <results>
-        <result type="text/html" name="token_counts.html"/>
+        <result type="text/html" name="tag_cloud.html"/>
         <result type="text/csv" name="token_counts.csv"/>
+        <result type="text/plain" name="volume_errors.txt"/>
     </results>
 </algorithm>

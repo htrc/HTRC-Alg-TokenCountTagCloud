@@ -2,7 +2,8 @@
   <appender class="ch.qos.logback.core.ConsoleAppender" name="STDOUT">
     <encoder>
       <!--<pattern>%date{HH:mm:ss.SSS} %highlight(%5level) %gray(%logger{90}) %msg%n%ex{short}</pattern>-->
-      <pattern>%date{HH:mm:ss.SSS} %highlight(%5level) %msg%n%ex{short}</pattern>
+      <!--<pattern>%date{HH:mm:ss.SSS} %highlight(%5level) %msg%n%ex{short}</pattern>-->
+      <pattern>%date{HH:mm:ss.SSS} %5level %msg%n%ex{short}</pattern>
     </encoder>
   </appender>
 
