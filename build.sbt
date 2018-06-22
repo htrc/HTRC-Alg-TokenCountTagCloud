@@ -56,8 +56,8 @@ lazy val `token-count-tag-cloud` = (project in file(".")).
   enablePlugins(SbtTwirl, GitVersioning, GitBranchPrompt, JavaAppPackaging).
   settings(commonSettings).
   settings(ammoniteSettings).
-  settings(spark("2.3.1")).
-  //settings(spark_dev("2.3.1")).
+  //settings(spark("2.3.1")).
+  settings(spark_dev("2.3.1")).
   settings(
     name := "token-count-tag-cloud",
     licenses += "Apache2" -> url("http://www.apache.org/licenses/LICENSE-2.0"),
