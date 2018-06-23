@@ -262,7 +262,7 @@ object Main {
     catch {
       case e: Throwable =>
         logger.error(s"Uncaught exception", e)
-        stopSparkAndExit(sc, exitCode = 1)
+        stopSparkAndExit(sc, exitCode = 500)
     }
 
     stopSparkAndExit(sc)
