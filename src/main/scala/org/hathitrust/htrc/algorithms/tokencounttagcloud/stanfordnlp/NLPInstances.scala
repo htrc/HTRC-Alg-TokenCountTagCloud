@@ -37,10 +37,12 @@ object NLPInstances {
   def forLocale(locale: Locale): Option[StanfordCoreNLP] = {
     if (Main.supportedLanguages.contains(locale.getLanguage))
       Option(instances.get(locale)).orElse {
-        instances.synchronized {
-          val instance = createInstance(locale)
-          instances.putIfAbsent(locale, instance)
-          Some(instance)
+        this.synchronized {
+          Option(instances.get(locale)).orElse {
+            val instance = createInstance(locale)
+            instances.putIfAbsent(locale, instance)
+            Some(instance)
+          }
         }
       }
     else None
