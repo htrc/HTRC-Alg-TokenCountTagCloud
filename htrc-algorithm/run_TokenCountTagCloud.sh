@@ -53,19 +53,19 @@ while read -r line; do declare "$line"; done < <(sed -rn 's;^([^ =]+)\s?=\s?(.*)
 [ -s "$workset" ] || error "$workset does not exist or is empty" 2
 
 # construct algorithm command line arguments
-[[ ! -z "$stopwords_url" ]] && OPTIONAL_ARGS="$OPTIONAL_ARGS --stopwords-url $stopwords_url"
-[[ ! -z "$corrections_url" ]] && OPTIONAL_ARGS="$OPTIONAL_ARGS --corrections-url $corrections_url"
-[[ ! -z "$token_filter" ]] && OPTIONAL_ARGS="$OPTIONAL_ARGS --token-filter $token_filter"
+[[ ! -z "$stopwords_url" ]] && OPTIONAL_ARGS="$OPTIONAL_ARGS --stopwords-url \"$stopwords_url\""
+[[ ! -z "$corrections_url" ]] && OPTIONAL_ARGS="$OPTIONAL_ARGS --corrections-url \"$corrections_url\""
+[[ ! -z "$token_filter" ]] && OPTIONAL_ARGS="$OPTIONAL_ARGS --token-filter \"$token_filter\""
 [[ ! -z "$lowercase" && "$lowercase" == "True" ]] && OPTIONAL_ARGS="$OPTIONAL_ARGS --lowercase"
-[[ ! -z "max_display" ]] && OPTIONAL_ARGS="$OPTIONAL_ARGS -m $max_display" 
+[[ ! -z "max_display" ]] && OPTIONAL_ARGS="$OPTIONAL_ARGS -m \"$max_display\""
 
 ALG_ARGS=" \
-  --dataapi-url $data_api_url \
-  -o $output_dir \
-  -l $language \
-  -c $num_cores \
+  --dataapi-url \"$data_api_url\" \
+  -o \"$output_dir\" \
+  -l \"$language\" \
+  -c \"$num_cores\" \
   $OPTIONAL_ARGS \
-  <(sed 1d \"$workset\")
+  <(sed 1d \"$workset\") \
 "
 
 ALG_JAVA_OPTS="-J-showversion"
