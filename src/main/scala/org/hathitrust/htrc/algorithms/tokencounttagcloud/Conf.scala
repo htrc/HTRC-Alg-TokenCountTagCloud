@@ -3,7 +3,7 @@ package org.hathitrust.htrc.algorithms.tokencounttagcloud
 import java.io.File
 import java.net.URL
 
-import org.rogach.scallop.{ScallopConf, ScallopOption}
+import org.rogach.scallop.{Scallop, ScallopConf, ScallopHelpFormatter, ScallopOption, SimpleOption}
 
 import scala.util.Try
 
@@ -13,6 +13,17 @@ import scala.util.Try
   * @param arguments The cmd line args
   */
 class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
+  appendDefaultToDescription = true
+  helpFormatter = new ScallopHelpFormatter {
+    override def getOptionsHelp(s: Scallop): String = {
+      super.getOptionsHelp(s.copy(opts = s.opts.map {
+        case opt: SimpleOption if !opt.required =>
+          opt.copy(descr = "(Optional) " + opt.descr)
+        case other => other
+      }))
+    }
+  }
+
   private val (appTitle, appVersion, appVendor) = {
     val p = getClass.getPackage
     val nameOpt = Option(p).flatMap(p => Option(p.getImplementationTitle))
