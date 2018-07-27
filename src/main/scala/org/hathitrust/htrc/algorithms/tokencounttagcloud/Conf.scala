@@ -69,6 +69,18 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     required = true
   )
 
+  val keyStore: ScallopOption[File] = opt[File]("keystore",
+    descr = "The keystore containing the client certificate to use for DataAPI",
+    argName = "FILE",
+    required = true
+  )
+
+  val keyStorePwd: ScallopOption[String] = opt[String]("keystore-pwd",
+    descr = "The keystore password",
+    argName = "PASSWORD",
+    required = true
+  )
+
   val language: ScallopOption[String] = opt[String]("language",
     descr = "ISO 639-1 language code ( https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes )",
     argName = "LANG",
@@ -109,6 +121,7 @@ class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   )
 
   validateFileExists(pairtreeRootPath)
+  validateFileExists(keyStore)
   validateFileExists(htids)
   verify()
 }
