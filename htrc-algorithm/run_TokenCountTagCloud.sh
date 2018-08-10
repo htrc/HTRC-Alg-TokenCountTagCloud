@@ -52,20 +52,32 @@ while read -r line; do declare "$line"; done < <(sed -rn 's;^([^ =]+)\s?=\s?(.*)
 [ -z "$output_dir" ] && error "output_dir not set by the Agent" 1
 [ -s "$workset" ] || error "$workset does not exist or is empty" 2
 
-# construct algorithm command line arguments
-[[ ! -z "$stopwords_url" ]] && OPTIONAL_ARGS="$OPTIONAL_ARGS --stopwords-url \"$stopwords_url\""
-[[ ! -z "$corrections_url" ]] && OPTIONAL_ARGS="$OPTIONAL_ARGS --corrections-url \"$corrections_url\""
-[[ ! -z "$token_filter" ]] && OPTIONAL_ARGS="$OPTIONAL_ARGS --token-filter \"$token_filter\""
-[[ ! -z "$lowercase" && "$lowercase" == "True" ]] && OPTIONAL_ARGS="$OPTIONAL_ARGS --lowercase"
-[[ ! -z "max_display" ]] && OPTIONAL_ARGS="$OPTIONAL_ARGS -m \"$max_display\""
+# construct algorithm configuration file
+cat << EOF > algorithm.conf
+$ALG_NAME {
+    dataapi-url = "$data_api_url"
+    dataapi-token = "$auth_token"
+    keystore = $HTRC_DEPENDENCY_DIR/algorithm_certs/algorithm.p12
+    keystore-pwd = TDU-2F4-n5k-5ln
+    output = $output_dir
+    language = $language
+    num-cores = $num_cores
+    $([[ ! -z "$stopwords_url" ]] && echo "stopwords-url = \"$stopwords_url\"")
+    $([[ ! -z "$corrections_url" ]] && echo "corrections-url = \"$corrections_url\"")
+    $([[ ! -z "$token_filter" ]] && echo "token-filter = \"\"\"$token_filter\"\"\"")
+    $([[ ! -z "$lowercase" && "$lowercase" == "True" ]] && echo "lowercase = true")
+    $([[ ! -z "$max_display" ]] && echo "max-display = $max_display")
+}
+EOF
+
+# the workset file contains a header row; subsequent rows begin with a volume
+# id which may or may not be followed by other fields separated with commas;
+# remove the header row, and extra fields to provide a list of volume ids to
+# the algorithm
 
 ALG_ARGS=" \
-  --dataapi-url \"$data_api_url\" \
-  -o \"$output_dir\" \
-  -l \"$language\" \
-  -c \"$num_cores\" \
-  $OPTIONAL_ARGS \
-  <(sed 1d \"$workset\") \
+  --config algorithm.conf \
+  <(sed 1d \"$workset\" | awk -F, '{ print \$1 }') \
 "
 
 ALG_JAVA_OPTS="-J-showversion"
@@ -74,8 +86,7 @@ ALG_JAVA_OPTS="-J-showversion"
 
 ### DO NOT MODIFY BELOW THIS LINE ###
 
-eval DATAAPI_TOKEN="$auth_token" \
-    $ALG_HOME/bin/$ALG_NAME $ALG_JAVA_OPTS -- $ALG_ARGS &
+eval $ALG_HOME/bin/$ALG_NAME $ALG_JAVA_OPTS -- $ALG_ARGS &
 
 CHILD_PID="$!"
 wait
