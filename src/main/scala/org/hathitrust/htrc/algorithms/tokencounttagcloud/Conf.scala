@@ -73,6 +73,9 @@ object Conf {
     val lowercaseBeforeCounting = cmdLineArgs.lowercaseBeforeCounting()
     val tagCloudTokenRegex = cmdLineArgs.tagCloudTokenFilter.toOption.map(_.r)
 
+    if (pairtreeRootPath.isEmpty && dataApiToken.isEmpty)
+      throw new RuntimeException("DATAAPI_TOKEN environment variable is missing")
+
     Conf(
       numPartitions = numPartitions,
       numCores = numCores,
