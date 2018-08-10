@@ -3,125 +3,91 @@ package org.hathitrust.htrc.algorithms.tokencounttagcloud
 import java.io.File
 import java.net.URL
 
-import org.rogach.scallop.{Scallop, ScallopConf, ScallopHelpFormatter, ScallopOption, SimpleOption}
+import com.typesafe.config.Config
 
-import scala.util.Try
+import scala.util.matching.Regex
 
-/**
-  * Command line argument configuration
-  *
-  * @param arguments The cmd line args
-  */
-class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
-  appendDefaultToDescription = true
-  helpFormatter = new ScallopHelpFormatter {
-    override def getOptionsHelp(s: Scallop): String = {
-      super.getOptionsHelp(s.copy(opts = s.opts.map {
-        case opt: SimpleOption if !opt.required =>
-          opt.copy(descr = "(Optional) " + opt.descr)
-        case other => other
-      }))
-    }
+case class Conf(numPartitions: Option[Int],
+                numCores: String,
+                pairtreeRootPath: Option[String],
+                dataApiUrl: Option[URL],
+                dataApiToken: Option[String],
+                keyStoreFile: Option[File],
+                keyStorePwd: Option[String],
+                outputPath: File,
+                language: String,
+                correctionsUrl: Option[URL],
+                stopWordsUrl: Option[URL],
+                maxTokensToDisplay: Int,
+                lowercaseBeforeCounting: Boolean,
+                tagCloudTokenRegex: Option[Regex])
+
+object Conf {
+  def fromConfig(config: Config): Conf = {
+    val numPartitions = if (config.hasPath("num-partitions")) Some(config.getInt("num-partitions")) else None
+    val numCores = if (config.hasPath("num-cores")) config.getString("num-cores") else Defaults.NUMCORES
+    val pairtreeRootPath = if (config.hasPath("pairtree")) Some(config.getString("pairtree")) else None
+    val dataApiUrl = if (config.hasPath("dataapi-url")) Some(new URL(config.getString("dataapi-url"))) else Some(Defaults.DATAAPI_URL)
+    val dataApiToken = if (config.hasPath("dataapi-token")) Some(config.getString("dataapi-token")) else None
+    val keyStoreFile = if (config.hasPath("keystore")) Some(new File(config.getString("keystore"))) else None
+    val keyStorePwd = if (config.hasPath("keystore-pwd")) Some(config.getString("keystore-pwd")) else None
+    val outputPath = new File(config.getString("output"))
+    val language = config.getString("language")
+    val correctionsUrl = if (config.hasPath("corrections-url")) Some(new URL(config.getString("corrections-url"))) else None
+    val stopWordsUrl = if (config.hasPath("stopwords-url")) Some(new URL(config.getString("stopwords-url"))) else None
+    val maxTokensToDisplay = if (config.hasPath("max-display")) config.getInt("max-display") else Defaults.MAXDISPLAY
+    val lowercaseBeforeCounting = if (config.hasPath("lowercase")) config.getBoolean("lowercase") else Defaults.LOWERCASE
+    val tagCloudTokenRegex = if (config.hasPath("token-filter")) Some(config.getString("token-filter").r) else None
+
+    Conf(
+      numPartitions = numPartitions,
+      numCores = numCores,
+      pairtreeRootPath = pairtreeRootPath,
+      dataApiUrl = dataApiUrl,
+      dataApiToken = dataApiToken,
+      keyStoreFile = keyStoreFile,
+      keyStorePwd = keyStorePwd,
+      outputPath = outputPath,
+      language = language,
+      correctionsUrl = correctionsUrl,
+      stopWordsUrl = stopWordsUrl,
+      maxTokensToDisplay = maxTokensToDisplay,
+      lowercaseBeforeCounting = lowercaseBeforeCounting,
+      tagCloudTokenRegex = tagCloudTokenRegex
+    )
   }
 
-  private val (appTitle, appVersion, appVendor) = {
-    val p = getClass.getPackage
-    val nameOpt = Option(p).flatMap(p => Option(p.getImplementationTitle))
-    val versionOpt = Option(p).flatMap(p => Option(p.getImplementationVersion))
-    val vendorOpt = Option(p).flatMap(p => Option(p.getImplementationVendor))
-    (nameOpt, versionOpt, vendorOpt)
+  def fromCmdLine(cmdLineArgs: CmdLineArgs): Conf = {
+    val numPartitions = cmdLineArgs.numPartitions.toOption
+    val numCores = cmdLineArgs.numCores.map(_.toString).getOrElse(Defaults.NUMCORES)
+    val pairtreeRootPath = cmdLineArgs.pairtreeRootPath.toOption.map(_.toString)
+    val dataApiUrl = cmdLineArgs.dataApiUrl.toOption
+    val dataApiToken = Option(System.getenv("DATAAPI_TOKEN"))
+    val keyStoreFile = cmdLineArgs.keyStore.toOption
+    val keyStorePwd = cmdLineArgs.keyStorePwd.toOption
+    val outputPath = cmdLineArgs.outputPath()
+    val language = cmdLineArgs.language()
+    val correctionsUrl = cmdLineArgs.correctionsUrl.toOption
+    val stopWordsUrl = cmdLineArgs.stopWordsUrl.toOption
+    val maxTokensToDisplay = cmdLineArgs.maxDisplay()
+    val lowercaseBeforeCounting = cmdLineArgs.lowercaseBeforeCounting()
+    val tagCloudTokenRegex = cmdLineArgs.tagCloudTokenFilter.toOption.map(_.r)
+
+    Conf(
+      numPartitions = numPartitions,
+      numCores = numCores,
+      pairtreeRootPath = pairtreeRootPath,
+      dataApiUrl = dataApiUrl,
+      dataApiToken = dataApiToken,
+      keyStoreFile = keyStoreFile,
+      keyStorePwd = keyStorePwd,
+      outputPath = outputPath,
+      language = language,
+      correctionsUrl = correctionsUrl,
+      stopWordsUrl = stopWordsUrl,
+      maxTokensToDisplay = maxTokensToDisplay,
+      lowercaseBeforeCounting = lowercaseBeforeCounting,
+      tagCloudTokenRegex = tagCloudTokenRegex
+    )
   }
-
-  version(appTitle.flatMap(
-    name => appVersion.flatMap(
-      version => appVendor.map(
-        vendor => s"$name $version\n$vendor"))).getOrElse(Main.appName))
-
-  val numPartitions: ScallopOption[Int] = opt[Int]("num-partitions",
-    descr = "The number of partitions to split the input set of HT IDs into, " +
-      "for increased parallelism",
-    argName = "N",
-    validate = 0 <
-  )
-
-  val numCores: ScallopOption[Int] = opt[Int]("num-cores",
-    descr = "The number of CPU cores to use (if not specified, uses all available cores)",
-    short = 'c',
-    argName = "N",
-    validate = 0 <
-  )
-
-  val dataApiUrl: ScallopOption[URL] = opt[URL]("dataapi-url",
-    descr = "The DataAPI endpoint URL (Note: DATAAPI_TOKEN environment variable must be set)",
-    default = Some(new URL("https://dataapi-algo.htrc.indiana.edu/data-api")),
-    argName = "URL",
-    noshort = true
-  )
-
-  val pairtreeRootPath: ScallopOption[File] = opt[File]("pairtree",
-    descr = "The path to the pairtree root hierarchy to process",
-    argName = "DIR"
-  )
-
-  val outputPath: ScallopOption[File] = opt[File]("output",
-    descr = "The folder where the output will be written to",
-    argName = "DIR",
-    required = true
-  )
-
-  val keyStore: ScallopOption[File] = opt[File]("keystore",
-    descr = "The keystore containing the client certificate to use for DataAPI",
-    argName = "FILE",
-    required = true
-  )
-
-  val keyStorePwd: ScallopOption[String] = opt[String]("keystore-pwd",
-    descr = "The keystore password",
-    argName = "PASSWORD",
-    required = true
-  )
-
-  val language: ScallopOption[String] = opt[String]("language",
-    descr = "ISO 639-1 language code ( https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes )",
-    argName = "LANG",
-    required = true
-  )
-
-  val correctionsUrl: ScallopOption[URL] = opt[URL]("corrections-url",
-    descr = "The URL containing the correction rules to use",
-    argName = "URL"
-  )
-
-  val stopWordsUrl: ScallopOption[URL] = opt[URL]("stopwords-url",
-    descr = "The URL containing the stop words to remove",
-    argName = "URL",
-    noshort = true
-  )
-
-  val lowercaseBeforeCounting: ScallopOption[Boolean] = opt[Boolean]("lowercase",
-    descr = "Lowercase all tokens before counting",
-    default = Some(false),
-    noshort = true
-  )
-
-  val tagCloudTokenFilter: ScallopOption[String] = opt[String]("token-filter",
-    descr = "Regular expression which determines which tokens will be displayed in the tag cloud",
-    noshort = true,
-    validate = regexp => Try(regexp.r).isSuccess
-  )
-
-  val maxDisplay: ScallopOption[Int] = opt[Int]("max-display",
-    descr = "Display only this many of the most highest-occurring tokens",
-    argName = "N",
-    default = Some(200)
-  )
-
-  val htids: ScallopOption[File] = trailArg[File]("htids",
-    descr = "The HT ids to process (if not provided, will read from stdin)"
-  )
-
-  validateFileExists(pairtreeRootPath)
-  validateFileExists(keyStore)
-  validateFileExists(htids)
-  verify()
 }
