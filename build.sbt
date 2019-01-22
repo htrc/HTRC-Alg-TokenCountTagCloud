@@ -8,7 +8,7 @@ lazy val commonSettings = Seq(
   organization := "org.hathitrust.htrc",
   organizationName := "HathiTrust Research Center",
   organizationHomepage := Some(url("https://www.hathitrust.org/htrc")),
-  scalaVersion := "2.11.12",
+  scalaVersion := "2.12.8",
   scalacOptions ++= Seq(
     "-feature",
     "-deprecation",
@@ -32,7 +32,7 @@ lazy val ammoniteSettings = Seq(
   libraryDependencies += {
     val version = scalaBinaryVersion.value match {
       case "2.10" => "1.0.3"
-      case _ ⇒ "1.1.2"
+      case _ ⇒ "1.6.2"
     }
     "com.lihaoyi" % "ammonite" % version % "test" cross CrossVersion.full
   },
@@ -56,8 +56,8 @@ lazy val `token-count-tag-cloud` = (project in file(".")).
   enablePlugins(SbtTwirl, GitVersioning, GitBranchPrompt, JavaAppPackaging).
   settings(commonSettings).
   settings(ammoniteSettings).
-  //settings(spark("2.3.1")).
-  settings(spark_dev("2.3.1")).
+  //settings(spark("2.4.0")).
+  settings(spark_dev("2.4.0")).
   settings(
     name := "token-count-tag-cloud",
     licenses += "Apache2" -> url("http://www.apache.org/licenses/LICENSE-2.0"),
@@ -65,9 +65,9 @@ lazy val `token-count-tag-cloud` = (project in file(".")).
       "org.hathitrust.htrc"           %% "data-model"           % "1.3.1",
       "org.hathitrust.htrc"           %% "dataapi-client"       % "0.9",
       "org.hathitrust.htrc"           %% "scala-utils"          % "2.6",
-      "org.hathitrust.htrc"           %% "spark-utils"          % "1.1.0",
-      "edu.stanford.nlp"              %  "stanford-corenlp"     % "3.9.1",
-      "edu.stanford.nlp"              %  "stanford-corenlp"     % "3.9.1"
+      "org.hathitrust.htrc"           %% "spark-utils"          % "1.2.0",
+      "edu.stanford.nlp"              %  "stanford-corenlp"     % "3.9.2",
+      "edu.stanford.nlp"              %  "stanford-corenlp"     % "3.9.2"
         classifier "models"
         classifier "models-arabic"
         classifier "models-chinese"
@@ -75,15 +75,15 @@ lazy val `token-count-tag-cloud` = (project in file(".")).
         classifier "models-french"
         classifier "models-german"
         classifier "models-spanish",
-      "com.nrinaudo"                  %% "kantan.csv"           % "0.4.0",
-      "com.typesafe.play"             %% "play-json"            % "2.6.9"
+      "com.nrinaudo"                  %% "kantan.csv"           % "0.5.0",
+      "com.typesafe.play"             %% "play-json"            % "2.7.0"
         exclude("com.fasterxml.jackson.core", "jackson-databind")
         exclude("ch.qos.logback", "logback-classic"),
       "com.typesafe"                  %  "config"               % "1.3.3",
-      "org.rogach"                    %% "scallop"              % "3.1.3",
+      "org.rogach"                    %% "scallop"              % "3.1.5",
       "com.gilt"                      %% "gfc-time"             % "0.0.7",
       "ch.qos.logback"                %  "logback-classic"      % "1.2.3",
-      "org.codehaus.janino"           %  "janino"               % "3.0.8",
+      "org.codehaus.janino"           %  "janino"               % "3.0.12",
       "org.scalacheck"                %% "scalacheck"           % "1.14.0"      % Test,
       "org.scalatest"                 %% "scalatest"            % "3.0.5"       % Test
     )
