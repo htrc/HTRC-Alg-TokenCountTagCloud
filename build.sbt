@@ -15,9 +15,10 @@ lazy val commonSettings = Seq(
     "-language:postfixOps",
     "-language:implicitConversions"
   ),
-  resolvers ++= Seq(
-    "I3 Repository" at "http://nexus.htrc.illinois.edu/content/groups/public",
-    Resolver.mavenLocal
+  externalResolvers := Seq(
+    Resolver.defaultLocal,
+    Resolver.mavenLocal,
+    "HTRC Nexus Repository" at "http://nexus.htrc.illinois.edu/content/groups/public",
   ),
   packageOptions in (Compile, packageBin) += Package.ManifestAttributes(
     ("Git-Sha", git.gitHeadCommit.value.getOrElse("N/A")),
@@ -29,35 +30,28 @@ lazy val commonSettings = Seq(
 )
 
 lazy val ammoniteSettings = Seq(
-  libraryDependencies += {
-    val version = scalaBinaryVersion.value match {
-      case "2.10" => "1.0.3"
-      case _ ⇒ "1.6.2"
-    }
-    "com.lihaoyi" % "ammonite" % version % "test" cross CrossVersion.full
-  },
+  libraryDependencies +=
+    {
+      val version = scalaBinaryVersion.value match {
+        case "2.10" => "1.0.3"
+        case _ ⇒ "1.6.7"
+      }
+      "com.lihaoyi" % "ammonite" % version % "test" cross CrossVersion.full
+    },
   sourceGenerators in Test += Def.task {
     val file = (sourceManaged in Test).value / "amm.scala"
     IO.write(file, """object amm extends App { ammonite.Main.main(args) }""")
     Seq(file)
   }.taskValue,
-  (fullClasspath in Test) ++= {
-    (updateClassifiers in Test).value
-      .configurations
-      .find(_.configuration == Test.name)
-      .get
-      .modules
-      .flatMap(_.artifacts)
-      .collect { case (a, f) if a.classifier.contains("sources") => f }
-  }
+  fork in (Test, run) := false
 )
 
 lazy val `token-count-tag-cloud` = (project in file(".")).
   enablePlugins(SbtTwirl, GitVersioning, GitBranchPrompt, JavaAppPackaging).
   settings(commonSettings).
   settings(ammoniteSettings).
-  //settings(spark("2.4.0")).
-  settings(spark_dev("2.4.0")).
+  //settings(spark("2.4.3")).
+  settings(spark_dev("2.4.3")).
   settings(
     name := "token-count-tag-cloud",
     licenses += "Apache2" -> url("http://www.apache.org/licenses/LICENSE-2.0"),
@@ -75,16 +69,16 @@ lazy val `token-count-tag-cloud` = (project in file(".")).
         classifier "models-french"
         classifier "models-german"
         classifier "models-spanish",
-      "com.nrinaudo"                  %% "kantan.csv"           % "0.5.0",
-      "com.typesafe.play"             %% "play-json"            % "2.7.0"
+      "com.nrinaudo"                  %% "kantan.csv"           % "0.5.1",
+      "com.typesafe.play"             %% "play-json"            % "2.7.4"
         exclude("com.fasterxml.jackson.core", "jackson-databind")
         exclude("ch.qos.logback", "logback-classic"),
-      "com.typesafe"                  %  "config"               % "1.3.3",
-      "org.rogach"                    %% "scallop"              % "3.1.5",
+      "com.typesafe"                  %  "config"               % "1.3.4",
+      "org.rogach"                    %% "scallop"              % "3.3.1",
       "com.gilt"                      %% "gfc-time"             % "0.0.7",
       "ch.qos.logback"                %  "logback-classic"      % "1.2.3",
       "org.codehaus.janino"           %  "janino"               % "3.0.12",
       "org.scalacheck"                %% "scalacheck"           % "1.14.0"      % Test,
-      "org.scalatest"                 %% "scalatest"            % "3.0.5"       % Test
+      "org.scalatest"                 %% "scalatest"            % "3.0.8"       % Test
     )
   )
