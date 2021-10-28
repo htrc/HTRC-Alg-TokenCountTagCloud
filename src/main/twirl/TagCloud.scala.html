@@ -1,8 +1,7 @@
 @import play.twirl.api.Html
 @import play.api.libs.json.Json
 @import org.hathitrust.htrc.algorithms.tokencounttagcloud.TagCloudConfig
-@import scala.collection.mutable
-@(tokens: mutable.MutableList[String], counts: mutable.MutableList[Int])(config: TagCloudConfig)
+@(tokens: Array[String], counts: Array[Int])(config: TagCloudConfig)
 <!DOCTYPE html>
 <meta charset="utf-8">
 <html>
