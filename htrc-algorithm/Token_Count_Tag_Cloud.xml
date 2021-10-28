@@ -1,96 +1,167 @@
 <algorithm>
     <info>
-        <name>Token_Count_Tag_Cloud</name>
+        <name>Token_Count_and_Tag_Cloud_Creator</name>
         <short_name>TagCloud</short_name>
         <version>2.0</version>
-        <shortdesc>TBD</shortdesc>
-        <description>TBD</description>
+        <shortdesc>Identify the tokens (words) that occur most often in a workset and the number of
+            times they occur. Create a tag cloud visualization of the most frequently occurring
+            words in a workset, where the size of the word is displayed in proportion to the number
+            of times it occurred. Can be run on worksets of fewer than 3000 volumes, as long as the
+            total size of the workset is less than 3 GB.
+        </shortdesc>
+        <description>Identify the tokens (words) that occur most often in a workset and the number
+            of times they occur. Create a tag cloud visualization of the most frequently occurring
+            words in a workset, where the size of the word is displayed in proportion to the number
+            of times it occurred. Can be run on worksets of fewer than 3000 volumes, as long as the
+            total size of the workset is less than 3 GB.
+
+            **How it works:**
+
+            &#8226; identifies page header/body/footer
+
+            &#8226; extracts page body only for analysis
+
+            &#8226; combines of end-of-line hyphenated words in order to de-hyphenate the text
+
+            &#8226; removes stop words as specified by user
+
+            &#8226; applies replacement rules (i.e. corrections) as specified by user, maintaining
+            the original case of the replaced words
+
+            &#8226; tokenizes the text using the Stanford NLP model for the language specified by
+            the user, or does white-space tokenization
+
+            &#8226; counts tokens
+
+            &#8226; sorts tokens in descending order by count
+
+            &#8226; saves the sorted token counts to a file
+
+            &#8226; generates the tag cloud according to the filter(s) specified by the user
+
+            **Result of job:** tag cloud showing the most frequently occurring words, and a file
+            with a list of those words and the number of times they occur.
+
+        </description>
         <authors>
             <author name="Boris Capitanu"/>
         </authors>
         <supportUrl>https://github.com/htrc/HTRC-Alg-TokenCountTagCloud/issues</supportUrl>
-        
+
         <parameters>
-            <param
-                name="input_collection"
-                type="collection"
-                required="true">
+            <param name="input_collection"
+                   type="collection"
+                   size_limit="3000"
+                   required="true">
                 <label>Please select a workset for analysis</label>
-                <description>The workset containing the volume ids to be used for analysis.</description>
+                <description>Select a collection for analysis.</description>
             </param>
-            <param
-                name="language"
-                type="string"
-                required="true">
-                <label>Please specify ISO 639-1 language code representing the predominant language in your workset</label>
-                <description>For a list of language codes, see: https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes</description>
+            <param name="language"
+                   type="string"
+                   required="true">
+                <label>Please specify the predominant language in your workset</label>
+                <description>Enter the code for the language most prevalent in your workset, and
+                    your text will be tokenized following rules for that language. For English,
+                    enter en. This algorithm best supports: English (en), French (fr), Arabic (ar),
+                    Chinese (zh), German (de), and Spanish (es). All other languages will be
+                    tokenized using white space to recognize tokens (words).
+                </description>
             </param>
-            <param
-                name="stopwords_url"
-                type="url"
-                required="false">
-                <label>Please provide a URL pointing to a text file containing stop words to be removed (one per line)</label>
-                <description>For English, you can use http://data.analytics.hathitrust.org/data/text/default_stopwords_en.txt</description>
+            <param name="stopwords_url"
+                   type="url"
+                   required="false"
+                   defaultValue="http://data.analytics.hathitrust.org/data/text/default_stopwords_en.txt">
+                <label>Please point to the list of stop words you would like to remove from your
+                    workset.
+                </label>
+                <description>You can use our list or input a URL pointing to a publicly-available
+                    text file that contains the list of stop words, formatted so that each word is
+                    on a separate line.
+                </description>
             </param>
-            <param
-                name="corrections_url"
-                type="url"
-                required="false">
-                <label>Please provide a URL pointing to a CSV file containing replacement rules</label>
-                <description>For English, you can use http://data.analytics.hathitrust.org/data/text/default_corrections.txt</description>
+            <param name="corrections_url"
+                   type="url"
+                   defaultValue="http://data.analytics.hathitrust.org/data/text/default_corrections.txt"
+                   required="false">
+                <label>Please provide a URL pointing to a CSV file containing replacement rules
+                </label>
+                <description>You can use our list or input a URL pointing to a publicly-available
+                    text file that contains your replacement rules where each line in the file
+                    contains the word to be replaced and its substitution, separated by a comma. The
+                    file should have a header row.
+                </description>
             </param>
-            <param
-                name="lowercase"
-                type="boolean"
-                required="false"
-                defaultValue="True">
+            <param name="lowercase"
+                   type="boolean"
+                   required="false"
+                   defaultValue="True">
                 <label>Lowercase all tokens before counting?</label>
-                <description>If set to true, tokens will be lowercased before counting.</description>
+                <description>If set to true, tokens will be lowercased before counting.
+                </description>
             </param>
-            <param
-                name="token_filter"
-                type="string"
-                required="false"
-                defaultValue="^\p{L}[\p{L}-]+$">
+            <param name="token_filter"
+                   type="string"
+                   required="false"
+                   defaultValue="^\p{L}[\p{L}-]+$">
                 <label>Display only tokens that match this regular expression</label>
-                <description>This regular expression controls which tokens get displayed in the tag cloud. The generated token count file does not use this filter and will contain all tokens with their counts.</description>
+                <description>This regular expression controls which tokens get displayed in the tag
+                    cloud. Use ours or write your own! The default matches only words composed of
+                    letters or containing a hyphen. Note: All tokens will appear in your token count
+                    list. This regular expression matching controls the tag cloud visualization
+                    only.
+                </description>
             </param>
-            <param
-                name="max_display"
-                type="int"
-                required="false"
-                defaultValue="200">
-                <label>Please provide the maximum number of tokens to display in the tag cloud</label>
-                <description>The maximum number of tokens to display in the tag cloud.</description>
+            <param name="max_display"
+                   type="int"
+                   required="false"
+                   defaultValue="200">
+                <label>Please provide the maximum number of tokens to display in the tag cloud
+                </label>
+                <description>This option controls how many tokens (words) will appear in your
+                    visualization.
+                </description>
             </param>
         </parameters>
     </info>
-    
+
+    <!-- walltime should have the form hhh:mm:ss or hh:mm:ss -->
+    <!-- allocating a larger no. of processors per node is not always to obtain more processors, but sometimes to obtain access to all the resources, such as memory, on a node -->
     <execution_info>
-        <number_of_processors>8</number_of_processors>
+        <input_size min="0" max="500">
+            <number_of_nodes>1</number_of_nodes>
+            <number_of_processors_per_node>8</number_of_processors_per_node>
+            <walltime>01:00:00</walltime>
+            <java_max_heap_size>10g</java_max_heap_size>
+        </input_size>
+        <input_size min="501" max="3000">
+            <number_of_nodes>1</number_of_nodes>
+            <number_of_processors_per_node>16</number_of_processors_per_node>
+            <walltime>02:00:00</walltime>
+            <java_max_heap_size>28g</java_max_heap_size>
+        </input_size>
     </execution_info>
-    
+
     <run_script>run_TokenCountTagCloud.sh</run_script>
     <properties_file_name>TokenCountTagCloud.properties</properties_file_name>
-    
+
     <dependencies>
         <dependency name="run_TokenCountTagCloud.sh" path="dependencies/run_TokenCountTagCloud.sh"/>
     </dependencies>
-    
+
     <system_properties>
         <e key="data_api_url">$data_api_url</e>
         <e key="auth_token">$auth_token</e>
         <e key="output_dir">$output_dir</e>
         <e key="workset">$input_collection</e>
         <e key="language">$language</e>
-        <e key="stopwords_url">$stopwords_url</e>        
+        <e key="stopwords_url">$stopwords_url</e>
         <e key="corrections_url">$corrections_url</e>
         <e key="lowercase">$lowercase</e>
         <e key="token_filter">$token_filter</e>
         <e key="max_display">$max_display</e>
         <e key="num_cores">8</e>
     </system_properties>
-    
+
     <results>
         <result type="text/html" name="tag_cloud.html"/>
         <result type="text/csv" name="token_counts.csv"/>

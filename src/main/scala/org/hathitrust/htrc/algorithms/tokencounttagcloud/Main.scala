@@ -4,7 +4,6 @@ import java.io._
 import java.security.KeyStore
 import java.util.Locale
 import java.util.concurrent.Executors
-
 import com.gilt.gfc.time.Timer
 import com.typesafe.config.ConfigFactory
 import edu.stanford.nlp.ling.CoreAnnotations
@@ -21,15 +20,14 @@ import org.hathitrust.htrc.algorithms.tokencounttagcloud.stanfordnlp.NLPInstance
 import org.hathitrust.htrc.data.ops.TextOptions._
 import org.hathitrust.htrc.data.{HtrcVolume, HtrcVolumeId}
 import org.hathitrust.htrc.tools.dataapi.DataApiClient
-import org.hathitrust.htrc.tools.scala.io.IOUtils.using
 import org.hathitrust.htrc.tools.spark.errorhandling.ErrorAccumulator
 import org.hathitrust.htrc.tools.spark.errorhandling.RddExtensions._
 
-import scala.collection.JavaConverters._
-import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext}
 import scala.io.{Codec, Source, StdIn}
+import scala.util.Using
 
 /**
   * Performs token count and generates a tag cloud for a given list of HT volume ids
@@ -51,17 +49,17 @@ object Main {
   def main(args: Array[String]): Unit = {
     val (conf, input) =
       if (args.contains("--config")) {
-        val configArgs = new ConfigFileArg(args)
+        val configArgs = new ConfigFileArg(args.toSeq)
         val input = configArgs.htids.toOption
         Conf.fromConfig(ConfigFactory.parseFile(configArgs.configFile()).getConfig(appName)) -> input
       } else {
-        val cmdLineArgs = new CmdLineArgs(args)
+        val cmdLineArgs = new CmdLineArgs(args.toSeq)
         val input = cmdLineArgs.htids.toOption
         Conf.fromCmdLine(cmdLineArgs) -> input
       }
 
     val htids = input match {
-      case Some(file) => Source.fromFile(file).getLines().toSeq
+      case Some(file) => Using.resource(Source.fromFile(file))(_.getLines().toSeq)
       case None => Iterator.continually(StdIn.readLine()).takeWhile(_ != null).toSeq
     }
 
@@ -90,7 +88,7 @@ object Main {
         val stopwords = conf.stopWordsUrl match {
           case Some(url) =>
             logger.info("Loading stop words from {}", url)
-            Source.fromURL(url)(Codec.UTF8).getLines().toSet
+            Using.resource(Source.fromURL(url)(Codec.UTF8))(_.getLines().toSet)
 
           case None => Set.empty[Token]
         }
@@ -148,7 +146,7 @@ object Main {
           idsRDD.mapPartitions {
             case ids if ids.nonEmpty =>
               val keyStore = KeyStore.getInstance("PKCS12")
-              using(new FileInputStream(keyStoreFile)) { ksf =>
+              Using.resource(new FileInputStream(keyStoreFile)) { ksf =>
                 keyStore.load(ksf, keyStorePwd.toCharArray)
               }
 
@@ -161,7 +159,7 @@ object Main {
 
               val ec = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor())
               val volumeIterator = Await.result(dataApi.retrieveVolumes(ids)(Codec.UTF8, ec), Duration.Inf)
-              val volumes = using(volumeIterator)(_
+              val volumes = Using.resource(volumeIterator)(_
                 .withFilter {
                   case Left(_) => true
                   case Right(error) =>
@@ -216,7 +214,7 @@ object Main {
                         checkTokenFormat(token) match {
                           case UpperCase => correction.toUpperCase(locale)
                           case LowerCase => correction
-                          case SentenceCase if correction.length >= 2 => correction.head.toUpper + correction.tail.toLowerCase(locale)
+                          case SentenceCase if correction.length >= 2 => s"${correction.head.toUpper}${correction.tail.toLowerCase(locale)}"
                           case _ => correction
                         }
                       case None if conf.lowercaseBeforeCounting => tokenLowerCase
@@ -244,22 +242,22 @@ object Main {
       logger.info("Saving token counts...")
       val writer = new OutputStreamWriter(new FileOutputStream(tokenCountsCsvFile), Codec.UTF8.charSet)
       val csvConfig = rfc.withHeader("token", "count")
-      using(writer.asCsvWriter[(Token, Int)](csvConfig)) { out =>
+      Using.resource(writer.asCsvWriter[(Token, Int)](csvConfig)) { out =>
         out.write(tokenCounts)
       }
 
       logger.info("Saving token counts tag cloud...")
-      using(new PrintWriter(tagCloudHtmlFile, Codec.UTF8.name)) { out =>
+      Using.resource(new PrintWriter(tagCloudHtmlFile, Codec.UTF8.name)) { out =>
         val it = tokenCounts.iterator
         val filteredTokenCounts = conf.tagCloudTokenRegex match {
           case Some(regex) => it.filter { case (token, _) => regex.findFirstMatchIn(token).isDefined }
           case None => it
         }
-        val tokens = mutable.MutableList.empty[Token]
-        val counts = mutable.MutableList.empty[Int]
-        for ((token, count) <- filteredTokenCounts.take(conf.maxTokensToDisplay)) {
-          tokens += token
-          counts += count
+        val tokens = Array.ofDim[Token](conf.maxTokensToDisplay)
+        val counts = Array.ofDim[Int](conf.maxTokensToDisplay)
+        for (((token, count), i) <- filteredTokenCounts.take(conf.maxTokensToDisplay).zipWithIndex) {
+          tokens(i) = token
+          counts(i) = count
         }
         out.write(TagCloud(tokens, counts)(TagCloudConfig(title = "Tag Cloud")).toString)
       }
