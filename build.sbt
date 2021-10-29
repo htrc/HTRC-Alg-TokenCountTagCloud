@@ -26,12 +26,16 @@ lazy val commonSettings = Seq(
     ("Git-Version", git.gitDescribedVersion.value.getOrElse("N/A")),
     ("Git-Dirty", git.gitUncommittedChanges.value.toString),
     ("Build-Date", new java.util.Date().toString)
-  ),
+  )
+)
+
+lazy val wartRemoverSettings = Seq(
   Compile / compile / wartremoverWarnings ++= Warts.unsafe.diff(Seq(
     Wart.DefaultArguments,
     Wart.NonUnitStatements,
     Wart.Any,
-    Wart.StringPlusAny
+    Wart.StringPlusAny,
+    Wart.OptionPartial
   ))
 )
 
@@ -42,7 +46,8 @@ lazy val buildInfoSettings = Seq(
     "gitSha" -> git.gitHeadCommit.value.getOrElse("N/A"),
     "gitBranch" -> git.gitCurrentBranch.value,
     "gitVersion" -> git.gitDescribedVersion.value.getOrElse("N/A"),
-    "gitDirty" -> git.gitUncommittedChanges.value
+    "gitDirty" -> git.gitUncommittedChanges.value,
+    "nameWithVersion" -> s"${name.value} ${version.value}"
   )
 )
 
@@ -67,6 +72,8 @@ lazy val ammoniteSettings = Seq(
 lazy val `token-count-tag-cloud` = (project in file("."))
   .enablePlugins(BuildInfoPlugin, SbtTwirl, GitVersioning, GitBranchPrompt, JavaAppPackaging)
   .settings(commonSettings)
+  .settings(wartRemoverSettings)
+  .settings(buildInfoSettings)
   .settings(ammoniteSettings)
   //.settings(spark("3.2.0"))
   .settings(spark_dev("3.2.0"))
