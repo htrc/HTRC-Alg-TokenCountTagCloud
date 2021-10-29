@@ -29,6 +29,8 @@ import scala.concurrent.{Await, ExecutionContext}
 import scala.io.{Codec, Source, StdIn}
 import scala.util.Using
 
+import utils.BuildInfo
+
 /**
   * Performs token count and generates a tag cloud for a given list of HT volume ids
   *
